@@ -45,7 +45,7 @@ streamlit run streamlit_app.py
 
 ## Usage
 
-1. **LLM Chat Mode**: Select "🌍 LLM Chat" mode for general knowledge questions
+1. **LLM Chat Mode**: Select "🌍 LLM Chat" mode for all the questions in the universe
 2. **PDF RAG Mode**: 
    - Select "📄 PDF RAG" mode
    - Upload a PDF file (max 10MB)
