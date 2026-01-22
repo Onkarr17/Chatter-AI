@@ -70,10 +70,7 @@ Chatter_AI/
 - **Answer Quality**: Small, Medium, Large presets
 - **Cache**: Automatically managed in `rag_cache/` directory
 
-## License
-
-MIT License
-
 ## Author
 
-Chatter AI Team
+Onkar Hadgaonkar
+Email : onkarhadgaonkar22@gmail.com
