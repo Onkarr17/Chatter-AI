@@ -44,6 +44,22 @@ section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, rgba(20,20,25,0.95), rgba(10,10,15,0.98));
     border-right: 1px solid rgba(255,255,255,0.06);
     padding-top: 0 !important;
+    min-width: 21.125rem !important;
+    overflow-y: visible !important;
+    overflow-x: visible !important;
+    height: auto !important;
+    max-height: 100vh !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+section[data-testid="stSidebar"] > div {
+    overflow-y: visible !important;
+    overflow-x: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
 }
 
 /* Remove gap above sidebar content */
