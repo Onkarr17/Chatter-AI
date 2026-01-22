@@ -1,4 +1,4 @@
-# 🤖 Chatter AI - PDF RAG Chatbot
+# 🤖 Chatter AI
 
 A powerful RAG (Retrieval-Augmented Generation) chatbot that can answer questions from PDF documents or provide general knowledge answers using LLM.
 
