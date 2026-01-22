@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Environment variables
+.env
+.env.local
+# But allow .env.example (template file)
+!.env.example
+
+# Cache and temporary files
+rag_cache/
+uploads/
+*.faiss
+*.npz
+
+# PDF files (user uploads)
+*.pdf
+!requirements.pdf  # Keep if you have a requirements PDF
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+tempCodeRunnerFile.py
+*.tmp
