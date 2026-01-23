@@ -39,6 +39,49 @@ div[data-testid="stDecoration"] { visibility: hidden; }
 button[title="View app source"] { display: none; }
 button[title="Deploy this app"] { display: none; }
 
+/* Hide and disable default Streamlit sidebar toggle button */
+button[data-testid="baseButton-header"],
+button[data-testid="baseButton-header"]:hover,
+button[data-testid="baseButton-header"]:active,
+button[data-testid="baseButton-header"]:focus,
+section[data-testid="stSidebar"] ~ * button[data-testid="baseButton-header"],
+.stApp button[data-testid="baseButton-header"],
+header button[data-testid="baseButton-header"],
+[data-testid="stHeader"] button[data-testid="baseButton-header"],
+button[aria-label*="sidebar"],
+button[aria-label*="menu"],
+button[title*="sidebar"],
+button[title*="menu"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    position: absolute !important;
+    left: -9999px !important;
+    top: -9999px !important;
+}
+
+/* Force sidebar to always be visible */
+section[data-testid="stSidebar"] {
+    display: block !important;
+    visibility: visible !important;
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+}
+
+.stApp.sidebar-collapsed section[data-testid="stSidebar"],
+section[data-testid="stSidebar"].collapsed {
+    display: block !important;
+    visibility: visible !important;
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+}
+
 /* Sidebar styling */
 section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, rgba(20,20,25,0.95), rgba(10,10,15,0.98));
@@ -454,6 +497,106 @@ if (mainContent) {
 // Also scroll after Streamlit reruns
 setTimeout(scrollToLatestMessage, 500);
 setTimeout(scrollToLatestMessage, 1000);
+
+// Disable default Streamlit sidebar toggle button and force sidebar visible
+(function() {
+    function disableSidebarToggle() {
+        // Find and remove/hide the toggle button
+        const toggleButtons = document.querySelectorAll(
+            'button[data-testid="baseButton-header"], ' +
+            'button[aria-label*="sidebar"], ' +
+            'button[aria-label*="menu"], ' +
+            'button[title*="sidebar"], ' +
+            'button[title*="menu"]'
+        );
+        
+        toggleButtons.forEach(function(btn) {
+            // Remove from DOM completely
+            try {
+                btn.remove();
+            } catch(e) {
+                // If remove fails, hide it aggressively
+                btn.style.display = 'none';
+                btn.style.visibility = 'hidden';
+                btn.style.opacity = '0';
+                btn.style.pointerEvents = 'none';
+                btn.style.width = '0';
+                btn.style.height = '0';
+                btn.style.position = 'absolute';
+                btn.style.left = '-9999px';
+                // Prevent clicks
+                btn.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                };
+            }
+        });
+        
+        // Force sidebar to be visible
+        const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+        const app = document.querySelector('.stApp');
+        
+        if (sidebar) {
+            // Remove collapsed classes
+            if (app) {
+                app.classList.remove('sidebar-collapsed');
+            }
+            sidebar.classList.remove('collapsed');
+            
+            // Force visible
+            sidebar.style.display = 'block';
+            sidebar.style.visibility = 'visible';
+            sidebar.style.transform = 'translateX(0)';
+            sidebar.style.opacity = '1';
+        }
+        
+        // Clear sidebar state from storage
+        try {
+            const keys = Object.keys(localStorage);
+            keys.forEach(function(key) {
+                if (key.includes('sidebar') || key.includes('collapsed')) {
+                    localStorage.removeItem(key);
+                }
+            });
+            
+            const sessionKeys = Object.keys(sessionStorage);
+            sessionKeys.forEach(function(key) {
+                if (key.includes('sidebar') || key.includes('collapsed')) {
+                    sessionStorage.removeItem(key);
+                }
+            });
+        } catch(e) {
+            // Ignore storage errors
+        }
+    }
+    
+    // Run immediately
+    disableSidebarToggle();
+    
+    // Run on page load
+    window.addEventListener('load', disableSidebarToggle);
+    
+    // Run after delays to catch Streamlit reruns
+    setTimeout(disableSidebarToggle, 100);
+    setTimeout(disableSidebarToggle, 500);
+    setTimeout(disableSidebarToggle, 1000);
+    
+    // Watch for DOM changes and disable toggle button
+    const observer = new MutationObserver(function() {
+        disableSidebarToggle();
+    });
+    
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style']
+    });
+    
+    // Also run periodically to catch any buttons that appear
+    setInterval(disableSidebarToggle, 500);
+})();
 </script>
 """, unsafe_allow_html=True)
 
