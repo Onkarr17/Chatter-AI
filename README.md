@@ -2,6 +2,8 @@
 
 A powerful RAG (Retrieval-Augmented Generation) chatbot that can answer questions from PDF documents or provide general knowledge answers using LLM.
 
+The project is deployed and here is Live link : https://chatter-ai-rag.streamlit.app/
+
 ## Features
 
 - 📄 **PDF RAG Mode**: Upload PDFs and ask questions about them
