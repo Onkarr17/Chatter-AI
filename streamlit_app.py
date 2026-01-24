@@ -607,6 +607,13 @@ setTimeout(scrollToLatestMessage, 1000);
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+if "messages_llm" not in st.session_state:
+    # Backward-compatible migration: keep any existing messages in LLM history
+    st.session_state.messages_llm = list(st.session_state.messages)
+
+if "messages_pdf_dict" not in st.session_state:
+    st.session_state.messages_pdf_dict = {}
+
 if "index" not in st.session_state:
     st.session_state.index = None
 
@@ -717,7 +724,13 @@ clear_chat = colA.button("🧹 Reset Chat", use_container_width=True)
 clear_cache = colB.button("🗑️ Clear Cache", use_container_width=True)
 
 if clear_chat:
-    st.session_state.messages = []
+    if mode == "🌍 LLM Chat":
+        st.session_state.messages_llm = []
+    else:
+        # Clear only the active PDF's chat, keep other PDFs intact
+        current_doc_hash = st.session_state.doc_hash
+        if current_doc_hash:
+            st.session_state.messages_pdf_dict[current_doc_hash] = []
     st.toast("Chat reset ✅")
 
 if clear_cache:
@@ -840,6 +853,33 @@ def stream_text(text: str, speed: float = 0.03):
         time.sleep(speed)  # Delay between words
 
 # ------------------------------------------------------------
+# PDF ANSWER FORMATTING
+# ------------------------------------------------------------
+def format_pdf_answer(text: str) -> str:
+    """
+    Add extra spacing to make short PDF RAG answers more readable.
+    Keeps content intact, only adjusts line breaks.
+    """
+    if not text:
+        return text
+
+    normalized = text.replace("\r\n", "\n").strip()
+
+    # If the answer is short and has no line breaks, add spacing between sentences.
+    if "\n" not in normalized and len(normalized) < 600:
+        for sep in [". ", "? ", "! "]:
+            normalized = normalized.replace(sep, sep.strip() + "\n\n")
+        return normalized
+
+    # For multi-line answers, ensure a blank line between list items/paragraphs.
+    lines = [ln.strip() for ln in normalized.split("\n") if ln.strip() != ""]
+    spaced = []
+    for ln in lines:
+        spaced.append(ln)
+        spaced.append("")  # blank line for spacing
+    return "\n".join(spaced).strip()
+
+# ------------------------------------------------------------
 # PDF LOAD + BUILD/LOAD INDEX
 # ------------------------------------------------------------
 def build_or_load_index(pdf_path: str, chunk_size: int = 800, chunk_overlap: int = 150):
@@ -880,26 +920,78 @@ def build_or_load_index(pdf_path: str, chunk_size: int = 800, chunk_overlap: int
 
 
 def step1_read_pdf_custom(pdf_path: str):
-    """Custom PDF loader that accepts a path parameter"""
+    """Custom PDF loader that accepts a path parameter with fallback for malformed PDFs"""
     from langchain_community.document_loaders import PyPDFLoader
+    from pypdf import PdfReader
+    from langchain_core.documents import Document
+    
     try:
+        # Try standard PyPDFLoader first
         loader = PyPDFLoader(pdf_path)
         pages = loader.load()
         if not pages or len(pages) == 0:
             raise ValueError("PDF appears to be empty or could not be read")
         return pages
-    except Exception as e:
-        raise Exception(f"Failed to load PDF from {pdf_path}: {str(e)}")
+    except (KeyError, Exception) as e:
+        # If standard loader fails (e.g., 'bbox' KeyError), try fallback method
+        if 'bbox' in str(e) or 'font' in str(e).lower() or 'KeyError' in str(type(e).__name__):
+            try:
+                # Fallback: Use pypdf directly with error handling per page
+                reader = PdfReader(pdf_path)
+                pages = []
+                for i, page in enumerate(reader.pages):
+                    try:
+                        # Try different extraction methods
+                        text = None
+                        # Method 1: Try with layout mode (if available in pypdf version)
+                        try:
+                            if hasattr(page, 'extract_text'):
+                                # Try with extraction_mode parameter if available
+                                import inspect
+                                sig = inspect.signature(page.extract_text)
+                                if 'extraction_mode' in sig.parameters:
+                                    text = page.extract_text(extraction_mode="layout")
+                                else:
+                                    text = page.extract_text()
+                        except Exception:
+                            pass
+                        
+                        # Method 2: If layout mode failed, try plain extraction
+                        if not text or text.strip() == "":
+                            text = page.extract_text()
+                        
+                        if text and text.strip():
+                            pages.append(Document(
+                                page_content=text,
+                                metadata={"page": i + 1, "source": pdf_path}
+                            ))
+                    except Exception as page_error:
+                        # Skip problematic pages but continue with others
+                        # Only show warning if we're in Streamlit context
+                        try:
+                            st.warning(f"⚠️ Skipped page {i + 1} due to extraction error. Continuing with other pages...")
+                        except:
+                            pass  # Not in Streamlit context, skip warning
+                        continue
+                
+                if not pages or len(pages) == 0:
+                    raise ValueError("PDF appears to be empty or could not be read with fallback method")
+                return pages
+            except Exception as fallback_error:
+                raise Exception(f"Failed to load PDF from {pdf_path} with both standard and fallback methods. Original error: {str(e)[:200]}. Fallback error: {str(fallback_error)[:200]}")
+        else:
+            # Re-raise if it's not a font/bbox related error
+            raise Exception(f"Failed to load PDF from {pdf_path}: {str(e)}")
 
 
 # ------------------------------------------------------------
 # INTERACTIVE PROMPT SUGGESTIONS (only show in LLM Chat mode, and only if no messages yet)
 # ------------------------------------------------------------
-if mode == "🌍 LLM Chat" and len(st.session_state.messages) == 0:
+if mode == "🌍 LLM Chat" and len(st.session_state.messages_llm) == 0:
     st.markdown("### 💡 Try asking")
     cols = st.columns(3)
     prompts = [
-        "What is RAG ?",
+        "What is AGI ?",
         "Any Movie recommendations",
         "Explain Newton's Laws"
     ]
@@ -912,7 +1004,13 @@ if mode == "🌍 LLM Chat" and len(st.session_state.messages) == 0:
 # ------------------------------------------------------------
 # SHOW CHAT HISTORY
 # ------------------------------------------------------------
-for msg in st.session_state.messages:
+if mode == "🌍 LLM Chat":
+    active_messages = st.session_state.messages_llm
+else:
+    current_doc_hash = st.session_state.doc_hash
+    active_messages = st.session_state.messages_pdf_dict.get(current_doc_hash, []) if current_doc_hash else []
+
+for msg in active_messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
@@ -1025,11 +1123,22 @@ if prefill and not question:
 
 if question:
     # add user msg
-    st.session_state.messages.append({"role": "user", "content": question})
+    if mode == "🌍 LLM Chat":
+        st.session_state.messages_llm.append({"role": "user", "content": question})
+    else:
+        current_doc_hash = st.session_state.doc_hash
+        if current_doc_hash:
+            st.session_state.messages_pdf_dict.setdefault(current_doc_hash, []).append(
+                {"role": "user", "content": question}
+            )
     with st.chat_message("user"):
         st.markdown(question)
 
     # assistant response
+    if mode == "📄 PDF RAG" and st.session_state.index and st.session_state.embedder:
+        status_placeholder = st.empty()
+        status_placeholder.caption("🔎 Retrieving relevant chunks...")
+
     with st.chat_message("assistant"):
         if mode == "🌍 LLM Chat":
             # Show status text without dimming the page
@@ -1037,7 +1146,7 @@ if question:
             status_placeholder.info("💭 Thinking...")
             
             # Get conversation history (last 10 messages for context)
-            conversation_history = st.session_state.messages[-10:] if len(st.session_state.messages) > 0 else []
+            conversation_history = st.session_state.messages_llm[-10:] if len(st.session_state.messages_llm) > 0 else []
             ans = step5_general_knowledge_answer(question, conversation_history=conversation_history, max_tokens=max_tokens)
             
             status_placeholder.empty()
@@ -1045,17 +1154,13 @@ if question:
             answer_placeholder = st.empty()
             for chunk in stream_text(ans, speed=0.02):
                 answer_placeholder.markdown(chunk)
-            st.session_state.messages.append({"role": "assistant", "content": ans})
+            st.session_state.messages_llm.append({"role": "assistant", "content": ans})
 
         else:
             # PDF RAG mode
             if not st.session_state.index or not st.session_state.embedder:
                 st.warning("Upload a PDF first.")
             else:
-                # Show status text without dimming the page
-                status_placeholder = st.empty()
-                status_placeholder.info("🔎 Retrieving relevant chunks...")
-                
                 # Create a rebuild callback for Streamlit (captures chunk_size and chunk_overlap from sidebar)
                 def rebuild_callback():
                     # Rebuild cache if normalization issue detected
@@ -1079,18 +1184,21 @@ if question:
                     st.session_state.chunks, top_k=top_k, force_rebuild_callback=None
                 )
 
-                status_placeholder.info("✍️ Generating answer...")
-                
                 # Get conversation history (last 10 messages for context)
-                conversation_history = st.session_state.messages[-10:] if len(st.session_state.messages) > 0 else []
+                current_doc_hash = st.session_state.doc_hash
+                current_pdf_msgs = st.session_state.messages_pdf_dict.get(current_doc_hash, []) if current_doc_hash else []
+                conversation_history = current_pdf_msgs[-10:] if len(current_pdf_msgs) > 0 else []
                 ans = step5_answer_from_retrieved(question, retrieved, top_k=top_k, conversation_history=conversation_history, max_tokens=max_tokens)
-
+                ans = format_pdf_answer(ans)
                 status_placeholder.empty()
                 # Stream the answer with typing effect
                 answer_placeholder = st.empty()
                 for chunk in stream_text(ans, speed=0.02):
                     answer_placeholder.markdown(chunk)
-                st.session_state.messages.append({"role": "assistant", "content": ans})
+                if current_doc_hash:
+                    st.session_state.messages_pdf_dict.setdefault(current_doc_hash, []).append(
+                        {"role": "assistant", "content": ans}
+                    )
 
                 # sources panel
                 with st.expander("📌 Sources (chunks)", expanded=False):

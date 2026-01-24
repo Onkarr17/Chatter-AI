@@ -408,6 +408,9 @@ def step6_cache_paths(doc_hash: str):
     Creates file paths for cache with versioning.
     Versioning prevents silent bugs when changing embedding model, chunk size, etc.
     """
+    # Ensure cache directory exists
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    
     idx_path = os.path.join(CACHE_DIR, f"{doc_hash}_{CACHE_VERSION}.faiss")
     meta_path = os.path.join(CACHE_DIR, f"{doc_hash}_{CACHE_VERSION}.npz")
     return idx_path, meta_path
@@ -417,6 +420,14 @@ def step6_save_cache(index, chunks, idx_path: str, meta_path: str):
     """
     Save FAISS index + chunks metadata so next run is instant.
     """
+    # Ensure the cache directory exists before writing
+    cache_dir = os.path.dirname(idx_path)
+    if cache_dir:  # Only create if there's a directory path
+        os.makedirs(cache_dir, exist_ok=True)
+    else:
+        # If no directory in path, use CACHE_DIR
+        os.makedirs(CACHE_DIR, exist_ok=True)
+    
     faiss.write_index(index, idx_path)
     np.savez_compressed(
         meta_path,
