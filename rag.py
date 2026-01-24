@@ -37,7 +37,8 @@ PDF_PATH = None
 ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path=ENV_PATH, override=True)
 
-CACHE_DIR = "rag_cache"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CACHE_DIR = os.path.join(BASE_DIR, "rag_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # Cache versioning - includes key parameters that affect cache validity
